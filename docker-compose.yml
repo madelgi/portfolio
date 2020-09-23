@@ -1,0 +1,13 @@
+version: "3"
+services:
+    frontend:
+        build:
+            context: ./frontend
+            dockerfile: Dockerfile.dev.2
+        volumes:
+            - ./frontend/src:/app/src
+            - ./frontend/content:/app/content
+        ports:
+            - "8000:8000"
+            - "9929:9929"
+            - "9230:9230"
