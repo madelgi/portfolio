@@ -68,3 +68,6 @@ public
 .vscode
 .DS_Store
 data/certbot
+
+# Project-specific items
+cv_4.pdf

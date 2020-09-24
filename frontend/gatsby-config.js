@@ -36,7 +36,11 @@ module.exports = {
           },
           {
             name: `Email`,
-            url: "mailto: maxdelgiudice@gmail.com"
+            url: `mailto: maxdelgiudice@gmail.com`
+          },
+          {
+            name: `Resume`,
+            url: `/pdf/cv_4.pdf`
           },
         ],
       },
