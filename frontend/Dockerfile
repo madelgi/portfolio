@@ -14,5 +14,5 @@ COPY . .
 
 EXPOSE 8000
 
-RUN echo ${BUILD_ENV}
+RUN ["chmod", "+x", "./bin/run.sh"]
 CMD ["./bin/run.sh"]

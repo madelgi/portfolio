@@ -3,7 +3,7 @@ services:
     frontend:
         build:
             context: ./frontend
-            dockerfile: Dockerfile.dev.2
+            dockerfile: Dockerfile
         volumes:
             - ./frontend/src:/app/src
             - ./frontend/content:/app/content
@@ -11,6 +11,7 @@ services:
             - ./.env
         ports:
             - "8000:8000"
+            - "9000:9000"
 
     nginx:
         image: nginx:1.15-alpine
