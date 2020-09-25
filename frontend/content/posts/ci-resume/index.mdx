@@ -1,0 +1,162 @@
+---
+title: Using GitHub Actions to update my resume
+date: 2020-09-24
+description: A toy CD pipeline for deploying changes to my resume.
+tags:
+    - continuous deploy
+    - git
+    - tex
+---
+
+After using it so much in college and grad school, I developed a soft spot in my heart for LaTeX, and
+although I'm no longer in academia, I continue to use it to typeset my resume. In the year 2020,
+are there alternatives that can prepare a nicely formatted resume with less hassle? Sure. Is all of this
+a waste of time? Maybe a little bit. But it looks really nice, and I've been using it for over 10 years,
+so why change now.
+
+
+## The problem
+
+I have a habit of creating personal websites for myself and never updating the content. I
+realized that if I want to have a functioning, accurate website, the process of updating these
+components must be as seamless as possible. A simple place to start is keeping my resume updated. I
+typically host a PDF of my resume on my site, and then it immediately becomes stagnant when I make
+a change to the content. I just cannot bring myself to copy the updated PDF to whatever server is hosting
+my website in a timely manner. No big deal if I just change a word or two, but after six months, the
+resume copy on my website ultimately becomes stale and inaccurate.
+
+
+## The solution
+
+I typically use Overleaf to edit my resume, and I recently noticed they have the option to sync your
+content with a number of external services -- Dropbox, GitHub, etc. The Dropbox integration requires
+a premium account, but the GitHub integration is free. I have been meaning to experiment with GitHub
+Actions over the past couple of months, and this seemed like the perfect, low-stakes environment to
+try them out. I figured the basic flow would be something like this:
+
+```
+Overleaf ---> GitHub ---- [SOME ACTION] -----> Updated website
+```
+
+As I mentioned earlier, the first part of this pipeline is provided for us by the developers at Overleaf,
+so let's figure out what `[SOME ACTION]` is, exactly.
+
+To start, Overleaf syncs with Github by creating a repo under your account with the source TeX files (e.g.,
+`.cls`, `.tex`,  etc). From there, whenever you make changes via Overleaf, it pushes those changes to the
+GitHub repo's master branch, and if you make changes via GitHub or locally, you can pull those into Overleaf.
+For a single person editing a document, it works fine. So now, there are two problems to solve:
+
+1. The GitHub repo contains source files, but not a compiled PDF. How do we automatically generate this PDF from source?
+2. Once the PDF is generated, where should we put it so that the website is immediately updated?
+
+Let's start by addressing the first issue.
+
+### Using GitHub Actions to compile LaTeX
+
+Actions are defined via `.yml` files stored in a `.github/workflows` directory that you keep in your repo.
+To understand them, I think it's useful to just jump into the code. Here's an action that compiles my source
+LaTeX files into a PDF whenever I push to master:
+
+```yaml
+name: Build TeX CD
+
+on:
+    push:
+        branches: [ master ]
+
+jobs:
+  build_latex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+      - name: Compile LaTeX document
+        uses: xu-cheng/latex-action@v2
+        with:
+          root_file: cv_4.tex
+
+```
+
+The first part of the file, under the `on` key, is a trigger: when should the action run? It specifies that the action
+should run whenever I push changes to master. The actual logic behind the job is under the `jobs:build_latex` key. Here's
+the breakdown of the keys underneath:
+
+- `runs-on`: This specifies the virtual environment in which the job runs. In this case, we are running our action on an
+   Ubuntu environment. This environment is hosted by Github, but you can specify your own action runner here as well.
+- `steps`: These are the sequence of tasks that define the job
+    - `name`: This is the name that displays for this step on Github (you can view your logging for your actions as they run)
+    - `uses`: While an action can basically be any arbitrary chunk of code, the community has thousands of prewritten actions
+       to choose from. For the first step, we use the `checkout` action, which checks-out your code from the current workspace,
+       so later steps in the workflow can access it. The second step uses the `latex-action` to compile our raw tex file into
+       a PDF.
+    - `with`: The `with` key passes in arguments to an action. In our case, the `latex-action` requires a `root_file`, i.e.,
+       which file(s) in the repository should we compile to PDFs? In this case, my resume is titled `cv_4.tex`, so I pass that
+       as an argument.
+
+The above example illustrates how straightforward it is to define an action. It's essentially just a configuration file that
+defines a series of executable steps. Frequently, the Github community will already have a prewritten action for you to use,
+in which case executing that action is as simple as referencing the community script, and supplying arguments (if needed).
+However, if that's not the case, you can write your own reusable action in a language of your choice.
+
+Returning to our actual goal, let's discuss what we've done: after committing the `.yml` file to the repo, we push our
+changes to master, the steps run successfully, and...nothing really happens. So far, what we've written checks out
+the code in our github workspace, and then compiles our source TeX files into a PDF. This PDF lives in our virtual
+environment, and it only exists during the lifetime of our action. We need one final step to actually place the resume
+in a location accessible by the web server.
+
+
+### Using GitHub Actions to upload a file to S3
+
+To wrap this all up, let's add one final step to upload the generated PDF to an S3 bucket.
+Doing this requires discussing one more Actions-related topic: secrets. Github makes it easy to store
+credentials that you can reference in your workflows. I am going to use the S3 cp command to move my
+resume PDF into my S3 bucket -- this requires credentials. To add a secret to your workflow,
+use the `Settings > Secrets` tab on your GitHub repo. After doing so, you can reference the secret in your
+Actions script similar to how you would use an environment variable, with the following syntax: `${{ secrets.MY_BIG_SECRET }}`.
+
+After adding my S3 key and secret, I can add the following step to my script:
+
+
+```yaml
+name: Build TeX CD
+
+on:
+    push:
+        branches: [ master ]
+
+jobs:
+  build_latex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Git repository
+        uses: actions/checkout@v2
+      - name: Compile LaTeX document
+        uses: xu-cheng/latex-action@v2
+        with:
+          root_file: cv_4.tex
+      - name: Upload to S3
+        uses: tpaschalis/s3-sync-action@master
+        with:
+            args: --acl public-read
+        env:
+            FILE: ./cv_4.pdf
+            AWS_REGION: us-west-2
+            AWS_S3_BUCKET: ${{ secrets.AWS_BUCKET }}
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET }}
+
+```
+
+We use a preexisting S3 copy action, pass in the relevant arguments, and upload
+the file to S3. That completes the pipeline -- whenever I push a change to master, either
+locally or via Overleaf's "Sync to GitHub" button, GitHub will take care of building a
+PDF and uploading it to S3. Simply make sure the S3 Key is publicly accessible, place it
+in the appropriate location in your website code, and you're good to go!
+
+
+## Closing thoughts and next steps
+
+The above `.yml` file is about 25 lines, and it builds and subsequently "deploys" (in a sense) my updated
+resume to an S3 bucket. This is pretty cool, and it gets me a little bit closer to having a website that
+I actually maintain. For the next post, I will use actions to set up a genuine CD pipeline for the
+website code itself, so I can seamlessly deploy styling changes, content updates, etc.
