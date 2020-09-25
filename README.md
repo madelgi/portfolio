@@ -6,13 +6,16 @@ beautiful theme designed by [LekoArts](https://github.com/LekoArts).
 
 ## Run locally
 
-To run the site locally, simply enter:
+To run the site locally, create an `.env` file with the following variables:
+
+```txt
+BUILD_ENV=development
+```
+
+After this, enter:
 
 ```bash
-$ docker-compose up
+$ docker-compose up --build frontend
 ```
 
 in the root directory. The site should now be accessible at `0.0.0.0:8000`.
-
-
-## Production deploy
