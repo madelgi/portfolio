@@ -38,7 +38,7 @@ on:
 
 
 jobs:
-  build_latex:
+  deploy_site_changes:
     runs-on: ubuntu-latest
     steps:
       - name: Pull changes and deploy to host
@@ -52,6 +52,8 @@ jobs:
             git pull
             docker-compose up -d --build
 ```
+
+We use the SSH action to SSH into the server, and then execute steps 2-4 mentioned in the introduction. Easy!
 
 
 ### A small Docker issue (and solution)
@@ -96,11 +98,11 @@ host, pull down changes, and build/restart the docker container. I should note t
 real-world, the process would probably be a bit more involved. If this repository contained
 actual mission-critical code that a business depended on, we would not allow merging directly
 to master. Instead, developers would make pull requests with their code, and a number of
-CI steps (defined via actions) would run, testing the code, linting it, checking for test coverage, etc.
-After passing these automated tests and a manual review, the code would get merged into master, at which point it
+CI steps would run, testing the code, linting it, checking for test coverage, etc. After passing
+these automated tests and a manual review, the code would get merged into master, at which point it
 would  probably auto-deploy to some staging server. If the staging site looks good
 and nothing is broken, one of the maintainers can manually promote the changes to the production
 server. All that said, the general process is quite similar -- I don't need all of the
 guardrails I laid out just now, because it doesn't particularly matter if I push a change that
 kills my website for a few minutes. But if I did need these additional steps, it would
-simply be a matter of defining a few more actions!
+simply be a matter of defining a few more actions.
