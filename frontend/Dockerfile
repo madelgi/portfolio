@@ -14,5 +14,7 @@ COPY . .
 
 EXPOSE 8000
 
+ARG BUILD_ENV
+RUN if [ "${BUILD_ENV}" == "production" ]; then gatsby build ; fi
 RUN ["chmod", "+x", "./bin/run.sh"]
 CMD ["./bin/run.sh"]

@@ -1,0 +1,106 @@
+---
+title: Using GitHub Actions to deploy my website
+date: 2020-09-25
+description: A CD pipeline for my Gatsby website
+tags:
+    - continuous deploy
+    - git
+    - tex
+    - docker
+---
+
+In my [first post](/using-git-hub-actions-to-update-my-resume), I set up a GitHub action that auto-compiled my
+resume and pushed it to S3, where it can be accessed from my website. This is pretty convenient,
+but what about the website itself? In this post, we are going to set up a similar CD pipeline,
+but for the actual code that comprises this website. When pushing a change to master, we
+want to:
+
+1. Connect to the website host server
+2. Pull down new changes in the master branch
+3. Rebuild the docker container(s)
+4. Restart the running docker container, replacing it with the newly created image
+
+With our roadmap in place, let's get started.
+
+
+## Website CD action
+
+Although the above steps sound a bit more involved than what we did in the first post, in
+some ways it's more straightforward. We are just SSH-ing into our server, and executing
+the sequence of commands we would normally execute manually:
+
+```yaml
+name: Deploy changes to portfolio site
+
+on:
+  push:
+    branches: [ master ]
+
+
+jobs:
+  build_latex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull changes and deploy to host
+        uses: appleyboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          script: |
+            cd portfolio
+            git pull
+            docker-compose up -d --build
+```
+
+
+### A small Docker issue (and solution)
+
+One problem with the way my code is structured now is in the frontend container run script:
+
+```bash
+#!/usr/bin/env bash
+
+if [ "$BUILD_ENV" == "development" ]; then
+    echo "Running development server"
+    gatsby develop -H 0.0.0.0
+else
+    echo "Running production server"
+    gatsby build
+    gatsby serve -H 0.0.0.0
+fi
+```
+
+This basically serves as the entrypoint to my Docker container. Consequently, when running
+the production server, we need to call `gatsby build` before serving the production build.
+This translates into a ~60 second window of downtime (amount of time it takes for the build
+command to execute) before the new version of my website is available. Although the chances
+are low that this site ever gets popular enough such that someone stumbles upon it at the exact
+moment I'm deploying an update, I'd rather not risk sending someone to an ugly 502 error page,
+and the fix is simple enough. We can just move the `gatsby build` step into the Dockerfile
+so it is executed at build time rather than runtime:
+
+```
+RUN if [ "${BUILD_ENV}" == "production" ]; then gatsby build ; fi
+```
+
+
+After this fix, and removing `gatsby build` from the run script, deploying new changes to my site
+is nearly seamless.
+
+
+## Closing thoughts
+
+This was ultimately even easier than the first action -- all we had to do was SSH into the
+host, pull down changes, and build/restart the docker container. I should note that in the
+real-world, the process would probably be a bit more involved. If this repository contained
+actual mission-critical code that a business depended on, we would not allow merging directly
+to master. Instead, developers would make pull requests with their code, and a number of
+CI steps (defined via actions) would run, testing the code, linting it, checking for test coverage, etc.
+After passing these automated tests and a manual review, the code would get merged into master, at which point it
+would  probably auto-deploy to some staging server. If the staging site looks good
+and nothing is broken, one of the maintainers can manually promote the changes to the production
+server. All that said, the general process is quite similar -- I don't need all of the
+guardrails I laid out just now, because it doesn't particularly matter if I push a change that
+kills my website for a few minutes. But if I did need these additional steps, it would
+simply be a matter of defining a few more actions!

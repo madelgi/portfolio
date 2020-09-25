@@ -1,0 +1,21 @@
+name: Deploy changes to portfolio site
+
+on:
+  push:
+    branches: [ master ]
+
+
+jobs:
+  build_latex:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull changes and deploy to host
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.KEY }}
+          script: |
+            cd portfolio
+            git pull
+            docker-compose up -d --build
