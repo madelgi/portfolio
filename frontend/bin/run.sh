@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env sh
 
 if [ "$BUILD_ENV" == "development" ]; then
     echo "Running development server"
