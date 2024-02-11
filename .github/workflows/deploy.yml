@@ -2,20 +2,34 @@ name: Deploy changes to portfolio site
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
 
+defaults:
+  run:
+    working-directory: ./frontend
 
 jobs:
-  build_latex:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Pull changes and deploy to host
-        uses: appleboy/ssh-action@master
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USERNAME }}
-          key: ${{ secrets.KEY }}
-          script: |
-            cd portfolio
-            git pull
-            docker-compose up -d --build
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run install
+        uses: borales/actions-yarn@v4
+        with:
+          cmd: install # will run `yarn install` command
+      - name: Build and deploy
+        run: |
+          yarn add gatsby
+          yarn run build
+          yarn run deploy -y
