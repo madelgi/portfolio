@@ -40,7 +40,7 @@ module.exports = {
           },
           {
             name: `Resume`,
-            url: `https://s3.amazonaws.com/external.maxdelgiudice.com/resume_current.pdf`
+            url: `https://s3.amazonaws.com/external.maxdelgiudice.com/cv_4.pdf`
           },
         ],
       },
