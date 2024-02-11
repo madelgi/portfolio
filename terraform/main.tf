@@ -10,43 +10,87 @@ terraform {
 }
 
 provider "aws" {
-    region = "us-west-2"
-}
-
-// Route53/DNS
-resource "aws_route53_zone" "maxdelgiudice" {
-    name = "maxdelgiudice.com"
-}
-
-resource "aws_route53_record" "www" {
-  zone_id = aws_route53_zone.maxdelgiudice.zone_id
-  name    = "www.maxdelgiudice.com"
-  type    = "CNAME"
-  ttl     = 300
-  records = ["maxdelgiudice.com"]
-}
-
-resource "aws_route53_record" "s3_alias" {
-  zone_id = aws_route53_zone.maxdelgiudice.zone_id
-  name    = "maxdelgiudice.com"
-  type    = "A"
-  alias {
-    evaluate_target_health = false
-    name                   = aws_cloudfront_distribution.maxdelgiudice.domain_name
-    zone_id                = aws_cloudfront_distribution.maxdelgiudice.hosted_zone_id
-  }
+    region = "us-east-1"
 }
 
 locals {
-  s3_origin_id = "myS3Origin"
   caching_optimized_policy_id = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+}
+
+
+// hosting bucket + perms
+resource "aws_s3_bucket" "maxdelgiudice" {
+    bucket = "maxdelgiudice.com"
+}
+
+resource "aws_s3_bucket_ownership_controls" "maxdelgiudice" {
+  bucket = aws_s3_bucket.maxdelgiudice.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_policy" "maxdelgiudice_public_access" {
+  bucket = aws_s3_bucket.maxdelgiudice.id
+  policy = data.aws_iam_policy_document.maxdelgiudice_public_access.json
+}
+
+data "aws_iam_policy_document" "maxdelgiudice_public_access" {
+  statement {
+    principals  {
+      type = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:GetObject"]
+    resources = [aws_s3_bucket.maxdelgiudice.arn, "${aws_s3_bucket.maxdelgiudice.arn}/*"]
+    effect    = "Allow"
+  }
+
+}
+
+resource "aws_s3_bucket_website_configuration" "maxdelgiudice" {
+  bucket = aws_s3_bucket.maxdelgiudice.id
+  index_document {
+    suffix = "index.html"
+  }
+}
+
+// bucket for external stuff (the gatsby s3 plugin overwrites everything on deploy, so this is
+// for static assets managed externally, e.g., my resume)
+resource "aws_s3_bucket" "external_maxdelgiudice" {
+  bucket = "external.maxdelgiudice.com"
+}
+
+resource "aws_s3_bucket_ownership_controls" "external_maxdelgiudice" {
+  bucket = aws_s3_bucket.external_maxdelgiudice.id
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
+resource "aws_s3_bucket_policy" "external_maxdelgiudice_public_access" {
+  bucket = aws_s3_bucket.external_maxdelgiudice.id
+  policy = data.aws_iam_policy_document.external_maxdelgiudice_public_access.json
+}
+
+data "aws_iam_policy_document" "external_maxdelgiudice_public_access" {
+  statement {
+    principals  {
+      type = "*"
+      identifiers = ["*"]
+    }
+    actions   = ["s3:GetObject"]
+    resources = [aws_s3_bucket.external_maxdelgiudice.arn, "${aws_s3_bucket.external_maxdelgiudice.arn}/*"]
+    effect    = "Allow"
+  }
+
 }
 
 // Cloudfront distribution (note: assumes existence of certificate)
 resource "aws_cloudfront_distribution" "maxdelgiudice" {
   origin {
-    domain_name              = aws_s3_bucket.maxdelgiudice.website_endpoint
-    origin_id                = aws_s3_bucket.maxdelgiudice.website_endpoint
+    domain_name              = aws_s3_bucket_website_configuration.maxdelgiudice.website_endpoint
+    origin_id                = aws_s3_bucket_website_configuration.maxdelgiudice.website_endpoint
     connection_attempts      = 3
     connection_timeout       = 10
     custom_origin_config {
@@ -67,7 +111,7 @@ resource "aws_cloudfront_distribution" "maxdelgiudice" {
   aliases = ["maxdelgiudice.com"]
 
   default_cache_behavior {
-    target_origin_id       = aws_s3_bucket.maxdelgiudice.website_endpoint
+    target_origin_id       = aws_s3_bucket_website_configuration.maxdelgiudice.website_endpoint
     cache_policy_id        = local.caching_optimized_policy_id
     allowed_methods        = ["GET", "HEAD"]
     cached_methods         = ["GET", "HEAD"]
@@ -96,15 +140,26 @@ resource "aws_cloudfront_distribution" "maxdelgiudice" {
   }
 }
 
-
-// hosting bucket
-resource "aws_s3_bucket" "maxdelgiudice" {
-    bucket = "maxdelgiudice.com"
+// Route53/DNS
+resource "aws_route53_zone" "maxdelgiudice" {
+    name = "maxdelgiudice.com"
 }
 
-resource "aws_s3_bucket_ownership_controls" "maxdelgiudice" {
-  bucket = aws_s3_bucket.maxdelgiudice.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
+resource "aws_route53_record" "www" {
+  zone_id = aws_route53_zone.maxdelgiudice.zone_id
+  name    = "www.maxdelgiudice.com"
+  type    = "CNAME"
+  ttl     = 300
+  records = ["maxdelgiudice.com"]
+}
+
+resource "aws_route53_record" "s3_alias" {
+  zone_id = aws_route53_zone.maxdelgiudice.zone_id
+  name    = "maxdelgiudice.com"
+  type    = "A"
+  alias {
+    evaluate_target_health = false
+    name                   = aws_cloudfront_distribution.maxdelgiudice.domain_name
+    zone_id                = aws_cloudfront_distribution.maxdelgiudice.hosted_zone_id
   }
 }
